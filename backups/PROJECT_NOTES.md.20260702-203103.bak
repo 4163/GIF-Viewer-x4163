@@ -1,0 +1,154 @@
+# GIF Viewer Helper Predecode Notes
+
+## Scope
+
+This folder contains an experimental source build of the SourceForge GIF Viewer project with a Quivi-style helper predecode path.
+
+Source project:
+
+```text
+https://sourceforge.net/projects/gifviewer/
+https://git.code.sf.net/p/gifviewer/git
+```
+
+The installed system copy of GIF Viewer was not modified.
+
+## Folder Layout
+
+```text
+gifviewer/
+  source/              cloned source, with local experimental changes
+  diffs/               change notes and hashes
+  backups/             backups of edited source files
+  tools/               smoke-test helper script
+```
+
+The moved `source/.git` metadata was removed to avoid shipping clone metadata or local paths.
+
+## Current Experiment
+
+The active experiment is in:
+
+```text
+source/GIFFile.cs
+```
+
+Behavior:
+
+- `GifFile.LoadFromPath()` first checks for the Quivi/Pillow helper runtime next to the built executable.
+- If present, GIF Viewer asks the helper to decode frames into temporary BMP files plus `delays.txt`.
+- GIF Viewer loads those BMPs into 32bpp in-memory `Bitmap` frames.
+- Playback then copies pixels from those predecoded frames.
+- If the helper is missing or fails, GIF Viewer falls back to its original internal decoder.
+
+Helper lookup order:
+
+1. `webp_extract_pillow_runtime/webp_extract_pillow/webp_extract_pillow.exe`
+2. `webp_extract_pillow.exe`
+
+## Reverted Experiment
+
+An earlier experiment forced nearest-neighbor scaling while playback was running.
+
+That was reverted because it did not improve performance enough and made the quality selector appear ineffective during playback.
+
+The note is kept for history:
+
+```text
+diffs/gifviewer-playback-fast-scaling.diff
+```
+
+The active helper experiment is documented here:
+
+```text
+diffs/gifviewer-helper-predecode.diff
+```
+
+## Build Command
+
+The project targets .NET Framework 4.5 but was built locally with VS 2022 MSBuild/Roslyn using installed .NET Framework runtime assemblies:
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
+  "source\GIF Viewer.csproj" `
+  /p:Configuration=Release `
+  /p:Platform=AnyCPU `
+  /p:FrameworkPathOverride="C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
+  /m
+```
+
+Expected output:
+
+```text
+source/bin/Release/GIF Viewer.exe
+```
+
+## Runtime Files
+
+To exercise the helper path, place these beside the built executable:
+
+```text
+source/bin/Release/webp_extract_pillow_runtime/
+source/bin/Release/webp_extract_pillow.exe
+```
+
+Those files were copied from the Quivi patched build during testing.
+
+Without those helper files, the application should use its original decoder path.
+
+## Smoke Test
+
+Tool:
+
+```text
+tools/gifviewer_smoke_helper.ps1
+```
+
+The script expects a test GIF at:
+
+```text
+gifviewer/sample-512-80.gif
+```
+
+or:
+
+```text
+gifviewer/source/bin/Release/sample-512-80.gif
+```
+
+It launches the rebuilt viewer and checks whether the helper process appeared during loading.
+
+Expected output includes:
+
+```text
+RUNNING=True
+SAW_HELPER=True
+```
+
+## Tradeoffs
+
+The helper path shifts work from playback time to load time.
+
+Potential benefits:
+
+- Less decoder work during playback.
+- More predictable frame switching after load.
+- Same helper runtime as the Quivi patch.
+
+Costs:
+
+- Higher initial load time.
+- Higher RAM use, because full frames are materialized.
+- Still experimental with large real-world GIFs.
+
+## Public Release Hygiene
+
+Before publishing or sharing:
+
+- Keep `source/`, `diffs/`, `backups/`, and `tools/` if sharing development history.
+- Exclude transient build folders if not needed.
+- Do not include private test GIFs.
+- Keep helper runtime files only if distributing a runnable experimental build.
+- Review licenses for GIF Viewer and the helper runtime dependencies.
+
+No private test paths or personal sample names should remain in the moved notes/scripts.

@@ -1,0 +1,12 @@
+# Source Bin Build-Output Cleanup
+
+The root runnable GIF Viewer copy is now the only live runnable copy in this package.
+
+The previous source build-output contents were archived first:
+
+```text
+backups/source-bin-build-output-20260702-210137.zip
+ZIP_ENTRIES=68
+```
+
+After verification, the duplicate files and runtime folders were removed from the source build-output folder while leaving the source tree structure intact.

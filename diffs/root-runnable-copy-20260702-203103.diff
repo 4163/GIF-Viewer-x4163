@@ -1,0 +1,15 @@
+# Root Runnable Build Copy
+
+The runnable GIF Viewer build artifacts were copied from the build output folder to the repository root so the modified viewer can be launched directly from the root folder.
+
+The source tree and original build output folder were left intact.
+
+Copied root-level artifacts:
+
+- GIF Viewer.exe
+- GIF Viewer.exe.config
+- GIF Viewer.exe.manifest
+- GIF Viewer.application
+- GifComponents/
+- webp_extract_pillow_runtime/
+- webp_extract_pillow.exe

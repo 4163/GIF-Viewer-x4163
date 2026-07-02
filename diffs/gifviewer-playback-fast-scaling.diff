@@ -1,0 +1,168 @@
+GIF Viewer playback fast-scaling pass
+=====================================
+
+Date: 2026-07-02
+
+Project
+-------
+Source cloned from:
+https://git.code.sf.net/p/gifviewer/git
+
+Local source:
+source
+
+Purpose
+-------
+Improve GIF Viewer playback smoothness for large GIFs by avoiding expensive
+GDI+ high-quality interpolation while animation is actively playing.
+
+The app already has a Quality context-menu setting:
+- Low    -> InterpolationMode.NearestNeighbor
+- Medium -> InterpolationMode.High
+- High   -> InterpolationMode.HighQualityBicubic
+
+This change keeps the user's selected quality for paused/still display, but
+temporarily uses the fast Low/nearest-neighbor path while playback is running.
+
+Backups
+-------
+- backups/source-backups/CPictureBox.cs.before-playback-fast-scaling.20260702-022747.bak
+- backups/source-backups/FormMain.cs.before-playback-fast-scaling.20260702-022747.bak
+
+Changed files
+-------------
+- source/CPictureBox.cs
+- source/FormMain.cs
+
+Source diff
+-----------
+```diff
+diff --git a/CPictureBox.cs b/CPictureBox.cs
+index 23c1506..25b2706 100644
+--- a/CPictureBox.cs
++++ b/CPictureBox.cs
+@@ -15,6 +15,11 @@ namespace GIF_Viewer
+         /// </summary>
+         public int Quality = 3;
+ 
++        /// <summary>
++        /// Whether playback should prefer fast scaling over the selected quality.
++        /// </summary>
++        public bool FastScalingWhilePlaying;
++
+@@ -42,7 +47,8 @@ namespace GIF_Viewer
+             pevent.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+ 
+             // Switch the drawing quality depending on the current settings:
+-            switch (Quality)
++            int quality = FastScalingWhilePlaying ? 1 : Quality;
++            switch (quality)
+```
+
+```diff
+diff --git a/FormMain.cs b/FormMain.cs
+index de6f059..23bd7bb 100644
+--- a/FormMain.cs
++++ b/FormMain.cs
+@@ -421,6 +421,7 @@ namespace GIF_Viewer
+                 // Dispose and nullify everything:
+                 _currentGif.Dispose();
+ 
++                pb_gif.FastScalingWhilePlaying = false;
+                 pb_gif.BackgroundImage = null;
+@@ -512,6 +513,7 @@ namespace GIF_Viewer
+             if (_currentGif.FrameCount > 1)
+             {
+                 _currentGif.Playing = true;
++                pb_gif.FastScalingWhilePlaying = true;
+                 AnimationTimer.Interval = UseMinFrameInterval ? Math.Max(_currentGif.GetIntervalForCurrentFrame(), MinFrameInterval) : _currentGif.GetIntervalForCurrentFrame();
+                 AnimationTimer.Start();
+             }
+@@ -557,6 +559,8 @@ namespace GIF_Viewer
+             else
+             {
+                 AnimationTimer.Stop();
++                pb_gif.FastScalingWhilePlaying = false;
++                pb_gif.Invalidate();
+             }
+@@ -597,6 +601,8 @@ namespace GIF_Viewer
+                 if (_currentGif.CurrentFrame == (_currentGif.FrameCount) && _currentGif.CanLoop == false)
+                 {
+                     _currentGif.Playing = false;
++                    pb_gif.FastScalingWhilePlaying = false;
++                    pb_gif.Invalidate();
+                 }
+@@ -866,6 +872,8 @@ namespace GIF_Viewer
+                 // Stop the animation timer if it's running
+                 AnimationTimer.Stop();
+                 _currentGif.Playing = false;
++                pb_gif.FastScalingWhilePlaying = false;
++                pb_gif.Invalidate();
+ 
+                 PlayBtn.Text = @"&Play";
+             }
+@@ -873,6 +881,7 @@ namespace GIF_Viewer
+             else if(PlayBtn.Text == @"&Play")
+             {
+                 // Restart the animation timer
++                pb_gif.FastScalingWhilePlaying = true;
+                 AnimationTimer.Start();
+                 _currentGif.Playing = true;
+```
+
+Build
+-----
+The system .NET Framework 4 compiler could not build the source because the
+project uses newer C# syntax. VS 2022 MSBuild/Roslyn works when framework
+assemblies are resolved from the installed .NET Framework runtime:
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
+  "source\GIF Viewer.csproj" `
+  /p:Configuration=Release `
+  /p:Platform=AnyCPU `
+  /p:FrameworkPathOverride="C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
+  /m
+```
+
+Result:
+- Build succeeded
+- 0 warnings
+- 0 errors
+
+Built executable
+----------------
+- source/bin/Release/GIF Viewer.exe
+- Size: 153,088 bytes
+- SHA256: 2A3776F6051F6061DBF4DCE4A468D20B8AE252B55A5798BC6B71B1B421503919
+
+Smoke test
+----------
+Launched the rebuilt executable against:
+<large-gif-sample>
+
+Result:
+- Process stayed running after 12 seconds.
+- Process was closed after the smoke test.
+- Installed copy under <gif-viewer-install> was not modified.
+
+Hashes
+------
+- CPictureBox.cs before:
+  SHA256: 5AF91483212A3FE31281CE98C256D04C859B0778700740C2F5E023213D7948A5
+
+- CPictureBox.cs after:
+  SHA256: 3C3F3A3BC88F63D5448D04F8217DF036AA86690255D7B345577E980532C21E96
+
+- FormMain.cs before:
+  SHA256: 2CF6826C0043E14906BB2282265FD5FF1ACB642EBFA30C135FC6BBE4E94214A2
+
+- FormMain.cs after:
+  SHA256: 605EA1234114B87E1B30EF1B21C7C3BD4F999D7DC3F675D532A65927970FFF4B
+
+Notes
+-----
+This is intentionally a conservative first GIF Viewer change. It does not alter
+decode, frame timing, frame disposal, memory settings, or the installed app. It
+only makes active playback use the already-existing nearest-neighbor fast draw
+path, then restores selected quality once playback stops.

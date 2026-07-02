@@ -1,0 +1,103 @@
+GIF Viewer helper predecode path
+================================
+
+Date: 2026-07-02
+
+Project
+-------
+Source cloned from:
+https://git.code.sf.net/p/gifviewer/git
+
+Local source:
+source
+
+Purpose
+-------
+Use the same bundled Pillow/PyInstaller helper created for Quivi as an optional
+GIF predecode path for GIF Viewer.
+
+The previous fast-scaling experiment was reverted because it did not improve
+performance and made the quality selector appear ineffective during playback.
+This change leaves CPictureBox/FormMain quality handling untouched and instead
+changes GIFFile loading/playback internals.
+
+Backups
+-------
+- backups/source-backups/GIFFile.cs.before-helper-predecode.20260702-023616.bak
+
+Changed files
+-------------
+- source/GIFFile.cs
+- tools/gifviewer_smoke_helper.ps1
+
+Runtime files copied next to the test build
+-------------------------------------------
+- source/bin/Release/webp_extract_pillow_runtime/
+- source/bin/Release/webp_extract_pillow.exe
+
+Behavior
+--------
+- GIFFile.LoadFromPath first checks for:
+  1. webp_extract_pillow_runtime/webp_extract_pillow/webp_extract_pillow.exe
+  2. webp_extract_pillow.exe
+- If found, it launches the helper hidden and asks it to decode the GIF to BMP
+  frames plus delays.txt in a temp folder.
+- BMP frames are cloned into 32bpp in-memory Bitmap objects.
+- The temp folder is deleted after load.
+- Frame playback copies pixels from the predecoded helper frames.
+- If the helper is missing or fails, GIF Viewer falls back to its original
+  GifDecoder path.
+- CPictureBox quality selection is unchanged.
+
+Build
+-----
+The project was built with VS 2022 MSBuild/Roslyn and the installed .NET
+Framework runtime assemblies:
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" `
+  "source\GIF Viewer.csproj" `
+  /p:Configuration=Release `
+  /p:Platform=AnyCPU `
+  /p:FrameworkPathOverride="C:\Windows\Microsoft.NET\Framework\v4.0.30319" `
+  /m
+```
+
+Result:
+- Build succeeded
+- 0 warnings
+- 0 errors
+
+Smoke test
+----------
+Test script:
+tools/gifviewer_smoke_helper.ps1
+
+Sample:
+<local-gif-sample>
+
+Result:
+- RUNNING=True
+- SAW_HELPER=True
+- No leftover GIF Viewer or webp_extract_pillow process found afterward.
+
+Built executable
+----------------
+- source/bin/Release/GIF Viewer.exe
+- SHA256: 0AE71DEC6B92303BAAFC974624DA97A25FB534C97BB91AACC5E556F0B816FF11
+
+Hashes
+------
+- GIFFile.cs before:
+  SHA256: CADB94C3B945BCFD224FAB96AFEBBF77151D79092FA5DC48C629D667569D5709
+
+- GIFFile.cs after:
+  SHA256: 034423C48DD8C7752693D8CD582EF4EDF5FC753B86C015988C4A2812E8461BF1
+
+Notes
+-----
+This is still experimental. The helper path should reduce playback-time decode
+work because every frame is already materialized before playback starts, but it
+will increase initial load time and RAM usage. Large-file performance should be
+tested with the user's real high-resolution GIF set before replacing the
+installed GIF Viewer executable.

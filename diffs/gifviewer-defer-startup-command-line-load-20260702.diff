@@ -1,0 +1,74 @@
+GIF Viewer deferred startup command-line load
+============================================
+
+Purpose
+-------
+
+When a large GIF was opened directly from Explorer/file association, the form
+constructor processed the command-line file immediately. That caused helper
+predecode to finish before the main window appeared.
+
+This change stores the initial command-line arguments and processes them from
+the first Shown event using BeginInvoke, allowing the window to paint before
+the expensive GIF load starts. In-app file opens and subsequent single-instance
+command-line opens continue to use the existing immediate ProcessCommandLine
+path.
+
+Files changed
+-------------
+
+- source/FormMain.cs
+
+Patch
+-----
+
+```diff
+diff --git a/source/FormMain.cs b/source/FormMain.cs
+--- a/source/FormMain.cs
++++ b/source/FormMain.cs
+@@
+         /// <summary>
+         /// Windows' Open File Dialog:
+         /// </summary>
+         private readonly OpenFileDialog _op = new OpenFileDialog();
++
++        /// <summary>
++        /// Command-line arguments to process after the form is first shown.
++        /// </summary>
++        private string[] _initialCommandLineArgs;
+@@
+-            ProcessCommandLine(args);
++            if (args != null && args.Length > 0 && File.Exists(args[0]))
++                _initialCommandLineArgs = args;
++            else
++                ProcessCommandLine(args);
+@@
+         private void Form1_Shown(object sender, EventArgs e)
+         {
+             AllowDrop = true;
+ 
++            if (_initialCommandLineArgs != null)
++            {
++                string[] args = _initialCommandLineArgs;
++                _initialCommandLineArgs = null;
++                BeginInvoke(new Action(() => ProcessCommandLine(args)));
++                return;
++            }
++
+             if (!_openFile)
+                 return;
+```
+
+Verification
+------------
+
+Built Release with MSBuild:
+
+```text
+Build succeeded.
+0 Warning(s)
+0 Error(s)
+```
+
+The Release executable and related runtime files were copied back to the root
+runnable location.
