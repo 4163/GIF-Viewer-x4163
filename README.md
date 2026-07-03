@@ -1,4 +1,4 @@
-# GIF Viewer Helper Predecode Notes
+# GIF Viewer Helper Predecode
 
 ## GIF Viewer 
 
